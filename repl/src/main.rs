@@ -1,4 +1,4 @@
-use lang_core::parser::parse;
+use core::parser::parse;
 use std::io::{self, Write};
 
 fn main() -> io::Result<()> {
