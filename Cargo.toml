@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "lang_cli",
+    "lang_core"
+]
