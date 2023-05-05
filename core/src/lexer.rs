@@ -7,11 +7,14 @@ use num_derive::{FromPrimitive, ToPrimitive};
 pub(crate) enum SyntaxKind {
     Root,
 
+    #[regex("#.*")]
+    Comment,
+
     BinaryExpr,
 
     PrefixExpr,
 
-    #[regex(" +")]
+    #[regex("[ \n]+")]
     Whitespace,
 
     #[token("fn")]
@@ -52,6 +55,12 @@ pub(crate) enum SyntaxKind {
 
     #[token(")")]
     RParen,
+}
+
+impl SyntaxKind {
+    pub(crate) fn is_trivia(self) -> bool {
+        matches!(self, Self::Whitespace | Self::Comment)
+    }
 }
 
 pub(crate) struct Lexer<'a> {
@@ -95,6 +104,11 @@ mod lexer_tests {
     fn generic_test(input: &str, kind: SyntaxKind) {
         let mut lexer = Lexer::new(input);
         assert_eq!(lexer.next(), Some(Lexeme { kind, text: input }))
+    }
+
+    #[test]
+    fn lex_spaces_and_newlines() {
+        generic_test("  \n ", SyntaxKind::Whitespace);
     }
 
     #[test]
@@ -180,5 +194,10 @@ mod lexer_tests {
     #[test]
     fn lex_right_paren() {
         generic_test(")", SyntaxKind::RParen);
+    }
+
+    #[test]
+    fn lex_comment() {
+        generic_test("# comment", SyntaxKind::Comment);
     }
 }

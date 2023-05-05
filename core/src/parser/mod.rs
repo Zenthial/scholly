@@ -1,6 +1,7 @@
 mod event;
 mod expr;
 mod sink;
+mod source;
 
 use crate::lexer::{Lexeme, Lexer, SyntaxKind};
 use crate::syntax::SyntaxNode;
@@ -8,6 +9,8 @@ use event::Event;
 use expr::expr;
 use rowan::GreenNode;
 use sink::Sink;
+
+use self::source::Source;
 
 pub fn parse(input: &str) -> Parse {
     let lexemes: Vec<_> = Lexer::new(input).collect();
@@ -21,16 +24,14 @@ pub fn parse(input: &str) -> Parse {
 }
 
 struct Parser<'l, 'input> {
-    lexemes: &'l [Lexeme<'input>],
-    cursor: usize,
+    source: Source<'l, 'input>,
     events: Vec<Event>,
 }
 
 impl<'l, 'input> Parser<'l, 'input> {
     fn new(lexemes: &'l [Lexeme<'input>]) -> Self {
         Self {
-            lexemes,
-            cursor: 0,
+            source: Source::new(lexemes),
             events: Vec::new(),
         }
     }
@@ -43,31 +44,17 @@ impl<'l, 'input> Parser<'l, 'input> {
         self.events
     }
 
-    fn peek(&mut self) -> Option<SyntaxKind> {
-        self.eat_whitespace();
-        self.peek_raw()
-    }
-
-    fn eat_whitespace(&mut self) {
-        while self.peek_raw() == Some(SyntaxKind::Whitespace) {
-            self.cursor += 1;
-        }
-    }
-
-    fn peek_raw(&mut self) -> Option<SyntaxKind> {
-        self.lexemes
-            .get(self.cursor)
-            .map(|Lexeme { kind, .. }| *kind)
-    }
-
     fn bump(&mut self) {
-        let Lexeme { kind, text } = self.lexemes[self.cursor];
+        let Lexeme { kind, text } = self.source.next_lexeme().unwrap();
 
-        self.cursor += 1;
         self.events.push(Event::AddToken {
-            kind,
-            text: text.into(),
+            kind: *kind,
+            text: (*text).into(),
         })
+    }
+
+    fn peek(&mut self) -> Option<SyntaxKind> {
+        self.source.peek_kind()
     }
 
     fn start_node_at(&mut self, checkpoint: usize, kind: SyntaxKind) {
@@ -122,6 +109,44 @@ mod parser_tests {
             expect![[r#"
 Root@0..3
   Whitespace@0..3 "   ""#]],
+        );
+    }
+
+    #[test]
+    fn parse_comment() {
+        check(
+            "# hello!",
+            expect![[r##"
+Root@0..8
+  Comment@0..8 "# hello!""##]],
+        );
+    }
+
+    #[test]
+    fn parse_binary_expression_interspersed_with_comments() {
+        check(
+            "
+1
+  + 1 # Add one
+  + 10 # Add ten",
+            expect![[r##"
+Root@0..35
+  Whitespace@0..1 "\n"
+  BinaryExpr@1..35
+    BinaryExpr@1..21
+      Number@1..2 "1"
+      Whitespace@2..5 "\n  "
+      Plus@5..6 "+"
+      Whitespace@6..7 " "
+      Number@7..8 "1"
+      Whitespace@8..9 " "
+      Comment@9..18 "# Add one"
+      Whitespace@18..21 "\n  "
+    Plus@21..22 "+"
+    Whitespace@22..23 " "
+    Number@23..25 "10"
+    Whitespace@25..26 " "
+    Comment@26..35 "# Add ten""##]],
         );
     }
 }
